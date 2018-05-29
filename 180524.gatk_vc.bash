@@ -11,17 +11,17 @@ md() {
 	ref=$2
 	picard_path=$3
 	cd $(dirname $srt_bam)
-	bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jvc_"$pre_fn" -ovc_"$pre_fn".o -K -evc_"$pre_fn".e "java -jar -Xmx4G  $picard_path MarkDuplicates I=${srt_bam} O=${pre_fn}.srt.rmdup.bam M=${pre_fn}.rmdup_matrix.txt AS=true" & 
+	bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jmd_"$pre_fn" -omd_"$pre_fn".o -K -emd_"$pre_fn".e "java -jar -Xmx4G  $picard_path MarkDuplicates I=${srt_bam} O=${pre_fn}.srt.rmdup.bam M=${pre_fn}.rmdup_matrix.txt AS=true" & 
 	cd $cur_dir
 }
 vc() {
 	cur_dir=$(pwd)
 	rmdup_srt_bam=$1
-	pre_fn=$(basename $rmdup_srt_bam .srt.rmdump.bam)
+	pre_fn=$(basename $rmdup_srt_bam .srt.rmdup.bam)
 	ref=$2
 	gatk_path=$3
 	cd $(dirname $rmdup_srt_bam)
-	bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jvc_"$pre_fn" -ovc_"$pre_fn".o -K -evc_"$pre_fn".e "java -jar -Xmx4G  ${gatk_path} HaplotypeCaller -R ${ref}  -I ${rmdup_srt_bam} -ERC GVCF -G Standard -GAS_Standard -O ${pre_fn}.raw.g.vcf" & 
+	bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jvc_"$pre_fn" -ovc_"$pre_fn".o -K -evc_"$pre_fn".e "java -jar -Xmx4G  ${gatk_path} HaplotypeCaller -R ${ref}  -I ${rmdup_srt_bam} -ERC GVCF -G StandardAnnotation -GAS_StandardAnnotation -O ${pre_fn}.raw.g.vcf" & 
 	cd $cur_dir
 	#sleep 100
 }
