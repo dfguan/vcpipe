@@ -2,8 +2,6 @@
 # Contact: Dengfeng Guan, dg30@sanger.ac.uk, dfguan@hit.edu.cn
 # Purpose: GATK Variant calling for mulitple samples using fAstCal as reference
 # Date: 180524
-
-
 md() {
 	cur_dir=$(pwd)
 	srt_bam=$1
