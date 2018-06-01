@@ -1,13 +1,17 @@
 import os, sys, glob, json
 
 def get_fls(pth, suf):
-    cur = os.getcwd()
-    os.chdir(pth)
-    abspath=os.path.abspath(pth)
+    # cur = os.getcwd()
+    # os.chdir(pth)
+    # abspath=os.path.abspath(pth)
     fls = []
-    for fl in glob.glob(suf):
-        fls.append(abspath+"/"+fl)
-    os.chdir(cur)
+    # for fl in glob.glob(suf, recursive=True): //not help 
+        # fls.append(abspath+"/"+fl)
+    for root, dirs, files in os.walk(pth):
+        for fn in files:
+            if fn.endswith(suf):
+                 fls.append(os.path.join(root, fn))
+    # os.chdir(cur)
     return fls
 
 def write(k, v, o_fl):
@@ -40,13 +44,15 @@ def write(k, v, o_fl):
     f.write('\n')
     f.close()
 
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 4:
         print ("mkcfg wd DIR SUFFIX KEY")
         print ("mkcfg add KEY MAP")
     else:
         d = sys.argv[1]
-        suf = "*."+sys.argv[2]
+        suf = "."+sys.argv[2]
         k = sys.argv[3]
         o = "config.json"
         write(k, get_fls(d, suf), o)
