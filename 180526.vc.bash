@@ -1,7 +1,7 @@
 #!/bin/bash
 # Contact: Dengfeng Guan, dg30@sanger.ac.uk, dfguan@hit.edu.cn
 # Purpose: GATK Variant calling for mulitple samples using fAstCal as reference
-# Date: 180524
+# Date: 180601	
 md_vc() {
 	cur_dir=$(pwd)
 	srt_bam=$1
@@ -10,12 +10,10 @@ md_vc() {
 	picard_path=$3
 	gatk_path=$4
 	cd $(dirname $srt_bam)
-	#bsub -M4000 -n4 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jmd -omd.o -K -emd.e "java -jar -Xmx4G -XX:ParallelGCThreads=4  $picard_path MarkDuplicates I=${srt_bam} O=${pre_fn}.srt.rmdup.bam M=${pre_fn}.rmdup_matrix.txt AS=true" & 
-	#wait
-	#bsub -M1000 -R"select[mem>1000] rusage[mem=1000]" -J idx -o idx.o -e idx.e -K "samtools index ${pre_fn}.srt.rmdup.bam" &
-	#wait
-	bsub -M4000 -n4 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jvc_${pre_fn} -ovc_${pre_fn}.o -K -evc_${pre_fn}.e "java -jar -Xmx4G  -XX:ParallelGCThreads=4 ${gatk_path} HaplotypeCaller -R ${ref}  -I ${pre_fn}.srt.rmdup.bam -ERC GVCF -G StandardAnnotation -GAS_StandardAnnotation -O ${pre_fn}.raw.g.vcf" & 
-	wait
+	java -jar -Xmx4G -XX:ParallelGCThreads=4  $picard_path MarkDuplicates I=${srt_bam} O=${pre_fn}.srt.rmdup.bam M=${pre_fn}.rmdup_matrix.txt AS=true  
+	samtools index ${pre_fn}.srt.rmdup.bam 
+	java -jar -Xmx4G  -XX:ParallelGCThreads=4 ${gatk_path} HaplotypeCaller -R ${ref}  -I ${pre_fn}.srt.rmdup.bam -ERC GVCF -G StandardAnnotation -GAS_StandardAnnotation -O ${pre_fn}.raw.g.vcf 
+
 	cd $cur_dir
 }
 vc() {
@@ -31,13 +29,15 @@ vc() {
 }
 
 #consolidate variations
-cv() {
+cv_gv_fv() {
 	gatk_path=$1
 	gvcfs=$2
 	ref=$3
 	out=$4
 	#java -jar -Xmx4G $gatk_path GenomicsDBImport $gvcfs --genomicsdb-workspace-path gvcf_db
-	bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jcv_gvcf -ocv_gvcf.o -K -ecv_gvcf.e "java -jar -Xmx4G $gatk_path CombineGVCFs $gvcfs -R $ref -O massoko.cmb.g.vcf && java -jar -Xmx4G $gatk_path GenotypeGVCFs -R $ref -V massoko.cmb.g.vcf -O $out" &
+	java -jar -Xmx4G $gatk_path CombineGVCFs $gvcfs -R $ref -O massoko.cmb.g.vcf 
+	java -jar -Xmx4G $gatk_path GenotypeGVCFs -R $ref -V massoko.cmb.g.vcf -O $out 
+	java -jar -Xmx4G ${gatk_path} VariantFiltration -R $ref -V $out -filter "QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0" --filter-name "basic_filtering" -O ${pref}_flted.vcf
 }
 
 #filter variations
@@ -50,10 +50,10 @@ fltv() {
 }
 
 
-export -f vc
+#export -f vc
 #export -f md
-export -f cv
-export -f fltv
+export -f cv_gv_fv
+#export -f fltv
 export -f md_vc
 if [ "$#" -lt 4 ]
 then
@@ -67,7 +67,12 @@ else
 	echo "Create Sequence Dictionary"
 	#samtools dict $ref -o "$pre_ref".dict
 	echo "Marking Duplicates..."
-	find $bam_dir -name "*.srt.bam" | xargs -n 1  -i bash -c "md_vc {} $ref $picard_path $gatk_path &" 
+	srtbams=`find $bam_dir -name "*.srt.bam"` # | xargs -n 1  -i bash -c "" 
+	
+	for fn in $srtbams
+	do
+		bsub -M4000 -n4 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jmd_vc -omd_vc.o -K -emd_vc.e md_vc $fn $ref $picard_path $gatk_path &	
+	done
 	#wait
 	#echo "Run Haplotype Variant Calling"
 	#find $bam_dir -name "*.srt.rmdup.bam" | xargs -n 1 -P8 -i bash -c "vc {} $ref $gatk_path" 
@@ -82,9 +87,11 @@ else
 		echo "No GVCF Files found"
 	else
 		out=massoko.vcf
-		cv $gatk_path $gvcfs $ref $out 
-		wait
-		echo "Filtering Variations..."
-		fltv $gatk $out $ref 
+		#cv $gatk_path $gvcfs $ref $out 
+		bsub -M4000 -n4 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jcv_gv_fv -ocv_gv_fv.o -ecv_gv_fv.e cv_gv_fv $gatk_path $gvcfs $ref $out 	
+		
+		#bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jcv_gvcf -ocv_gvcf.o -K -ecv_gvcf.e "java -jar -Xmx4G $gatk_path CombineGVCFs $gvcfs -R $ref -O massoko.cmb.g.vcf && java -jar -Xmx4G $gatk_path GenotypeGVCFs -R $ref -V massoko.cmb.g.vcf -O $out" 
+		#echo "Filtering Variations..."
+		#bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jfltv_"$pre_fn" -ofltv_"$pre_fn".o -efltv_"$pre_fn".e "java -jar -Xmx4G ${gatk_path} VariantFiltration -R $ref -V $raw_vcf -filter "QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0" --filter-name "basic_filtering" -O ${pref}_flted.vcf"
 	fi
 fi
