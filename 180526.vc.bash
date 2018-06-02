@@ -9,10 +9,12 @@ md_vc() {
 	ref=$2
 	picard_path=$3
 	gatk_path=$4
+	mem=$5
+	threads=$6
 	cd $(dirname $srt_bam)
-	java -jar -Xmx4G -XX:ParallelGCThreads=4  $picard_path MarkDuplicates I=${srt_bam} O=${pre_fn}.srt.rmdup.bam M=${pre_fn}.rmdup_matrix.txt AS=true  
+	java -jar -Xmx$mem -XX:ParallelGCThreads=$threads  $picard_path MarkDuplicates I=${srt_bam} O=${pre_fn}.srt.rmdup.bam M=${pre_fn}.rmdup_matrix.txt AS=true  
 	samtools index ${pre_fn}.srt.rmdup.bam 
-	java -jar -Xmx4G  -XX:ParallelGCThreads=4 ${gatk_path} HaplotypeCaller -R ${ref}  -I ${pre_fn}.srt.rmdup.bam -ERC GVCF -G StandardAnnotation -GAS_StandardAnnotation -O ${pre_fn}.raw.g.vcf 
+	java -jar -Xmx$mem  -XX:ParallelGCThreads=$threads ${gatk_path} HaplotypeCaller -R ${ref}  -I ${pre_fn}.srt.rmdup.bam -ERC GVCF -G StandardAnnotation -GAS_StandardAnnotation -O ${pre_fn}.raw.g.vcf 
 
 	cd $cur_dir
 }
@@ -34,11 +36,12 @@ cv_gv_fv() {
 	gvcfs=$2
 	ref=$3
 	out=$4
+	mem=$5
 	#echo $gvcfs $ref $out
 	#java -jar -Xmx4G $gatk_path GenomicsDBImport $gvcfs --genomicsdb-workspace-path gvcf_db
-	java -jar -Xmx4G $gatk_path CombineGVCFs $gvcfs -R $ref -O massoko.cmb.g.vcf 
-	java -jar -Xmx4G $gatk_path GenotypeGVCFs -R $ref -V massoko.cmb.g.vcf -O $out 
-	java -jar -Xmx4G $gatk_path VariantFiltration -R $ref -V $out -filter "QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0" --filter-name "basic_filtering" -O ${pref}_flted.vcf
+	java -jar -Xmx$5 $gatk_path CombineGVCFs $gvcfs -R $ref -O massoko.cmb.g.vcf 
+	java -jar -Xmx$5 $gatk_path GenotypeGVCFs -R $ref -V massoko.cmb.g.vcf -O $out 
+	java -jar -Xmx$5 $gatk_path VariantFiltration -R $ref -V $out -filter "QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0" --filter-name "basic_filtering" -O ${pref}_flted.vcf
 }
 
 #filter variations
@@ -72,7 +75,7 @@ else
 	
 	#for fn in $srtbams
 	#do
-		#bsub -M4000 -n4 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jmd_vc -omd_vc.o -K -emd_vc.e md_vc $fn $ref $picard_path $gatk_path &	
+		#bsub -M4000 -n4 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jmd_vc -omd_vc.o -K -emd_vc.e md_vc $fn $ref $picard_path $gatk_path 4G 4 &	
 	#done
 	#wait
 	#echo "Run Haplotype Variant Calling"
@@ -100,7 +103,7 @@ else
 	else
 		out=massoko.vcf
 		#cv $gatk_path $gvcfs $ref $out 
-		bsub -M4000 -n4 -qlong -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jcv_gv_fv -ocv_gv_fv.o -ecv_gv_fv.e cv_gv_fv $gatk_path "$param_gvcfs" $ref $out # add quotation marks incase of parameter being splitted	
+		bsub -M10000 -n4 -qlong -R"select[mem>10000] rusage[mem=10000] span[hosts=1]" -Jcv_gv_fv -ocv_gv_fv.o -ecv_gv_fv.e cv_gv_fv $gatk_path "$param_gvcfs" $ref $out 10G 4 # add quotation marks incase of parameter being splitted	
 		
 		#bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jcv_gvcf -ocv_gvcf.o -K -ecv_gvcf.e "java -jar -Xmx4G $gatk_path CombineGVCFs $gvcfs -R $ref -O massoko.cmb.g.vcf && java -jar -Xmx4G $gatk_path GenotypeGVCFs -R $ref -V massoko.cmb.g.vcf -O $out" 
 		#echo "Filtering Variations..."
