@@ -34,10 +34,11 @@ cv_gv_fv() {
 	gvcfs=$2
 	ref=$3
 	out=$4
+	#echo $gvcfs $ref $out
 	#java -jar -Xmx4G $gatk_path GenomicsDBImport $gvcfs --genomicsdb-workspace-path gvcf_db
 	java -jar -Xmx4G $gatk_path CombineGVCFs $gvcfs -R $ref -O massoko.cmb.g.vcf 
 	java -jar -Xmx4G $gatk_path GenotypeGVCFs -R $ref -V massoko.cmb.g.vcf -O $out 
-	java -jar -Xmx4G ${gatk_path} VariantFiltration -R $ref -V $out -filter "QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0" --filter-name "basic_filtering" -O ${pref}_flted.vcf
+	java -jar -Xmx4G $gatk_path VariantFiltration -R $ref -V $out -filter "QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0" --filter-name "basic_filtering" -O ${pref}_flted.vcf
 }
 
 #filter variations
@@ -81,11 +82,17 @@ else
 	echo "Consolidating Variations..."
 	gvcf_dir=$bam_dir
 	
-	gvcfs=`find $gvcf_dir -name "*.g.vcf"` # | xargs -n1 -i gvcfs=$gvcfs"-V {} "
+	gvcfs=`find $gvcf_dir -name "*.g.vcf" -size +100M` # | xargs -n1 -i gvcfs=$gvcfs"-V {} "
 	param_gvcfs=""
+	#echo ${#gvcfs} files are taken
 	for fn in $gvcfs
 	do
-		param_gvcfs=$param_gvcfs" -V "$fn
+		#if [ -s "$fn" ]
+		#then
+			param_gvcfs=$param_gvcfs" -V "$fn
+		#else
+			#echo $fn has no contents
+		#fi
 	done
 	if [ "$param_gvcfs" = "" ]
 	then
@@ -93,7 +100,7 @@ else
 	else
 		out=massoko.vcf
 		#cv $gatk_path $gvcfs $ref $out 
-		bsub -M4000 -n4 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jcv_gv_fv -ocv_gv_fv.o -ecv_gv_fv.e cv_gv_fv $gatk_path $gvcfs $ref $out 	
+		bsub -M4000 -n4 -qlong -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jcv_gv_fv -ocv_gv_fv.o -ecv_gv_fv.e cv_gv_fv $gatk_path "$param_gvcfs" $ref $out # add quotation marks incase of parameter being splitted	
 		
 		#bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jcv_gvcf -ocv_gvcf.o -K -ecv_gvcf.e "java -jar -Xmx4G $gatk_path CombineGVCFs $gvcfs -R $ref -O massoko.cmb.g.vcf && java -jar -Xmx4G $gatk_path GenotypeGVCFs -R $ref -V massoko.cmb.g.vcf -O $out" 
 		#echo "Filtering Variations..."
