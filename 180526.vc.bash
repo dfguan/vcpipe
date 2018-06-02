@@ -69,10 +69,10 @@ else
 	echo "Marking Duplicates..."
 	srtbams=`find $bam_dir -name "*.srt.bam"` # | xargs -n 1  -i bash -c "" 
 	
-	for fn in $srtbams
-	do
-		bsub -M4000 -n4 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jmd_vc -omd_vc.o -K -emd_vc.e md_vc $fn $ref $picard_path $gatk_path &	
-	done
+	#for fn in $srtbams
+	#do
+		#bsub -M4000 -n4 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jmd_vc -omd_vc.o -K -emd_vc.e md_vc $fn $ref $picard_path $gatk_path &	
+	#done
 	#wait
 	#echo "Run Haplotype Variant Calling"
 	#find $bam_dir -name "*.srt.rmdup.bam" | xargs -n 1 -P8 -i bash -c "vc {} $ref $gatk_path" 
@@ -80,9 +80,14 @@ else
 	wait
 	echo "Consolidating Variations..."
 	gvcf_dir=$bam_dir
-	gvcfs=""
-	find $gvcf_dir -name "*.g.vcf" | xargs -n1 -i gvcfs=$gvcfs"-V {} "
-	if [ "$gvcfs" = "" ]
+	
+	gvcfs=`find $gvcf_dir -name "*.g.vcf"` # | xargs -n1 -i gvcfs=$gvcfs"-V {} "
+	param_gvcfs=""
+	for fn in $gvcfs
+	do
+		param_gvcfs=$param_gvcfs" -V "$fn
+	done
+	if [ "$param_gvcfs" = "" ]
 	then
 		echo "No GVCF Files found"
 	else
