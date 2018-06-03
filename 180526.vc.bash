@@ -37,9 +37,10 @@ cv_gv_fv() {
 	ref=$3
 	out=$4
 	mem=$5
+	pref=$(basename $out .vcf)
 	#echo $gvcfs $ref $out
 	#java -jar -Xmx4G $gatk_path GenomicsDBImport $gvcfs --genomicsdb-workspace-path gvcf_db
-	java -jar -Xmx$5 $gatk_path CombineGVCFs $gvcfs -R $ref -O massoko.cmb.g.vcf 
+	java -jar -Xmx$5 $gatk_path CombineGVCFs $gvcfs -R $ref -O massoko.cmb.g.vcf
 	java -jar -Xmx$5 $gatk_path GenotypeGVCFs -R $ref -V massoko.cmb.g.vcf -O $out 
 	java -jar -Xmx$5 $gatk_path VariantFiltration -R $ref -V $out -filter "QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0" --filter-name "basic_filtering" -O ${pref}_flted.vcf
 }

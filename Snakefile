@@ -36,8 +36,9 @@ rule bam2fq:
 
 rule bwa_map:
 	input: 
+		ref+".bwt",
 		i1 = "{fpath}_1.fq",
-		i2 = "{fpath}_2.fq",
+		i2 = "{fpath}_2.fq" 
 	output:
 		srtbam = "{fpath}.srt.bam", 
 		#lsf_j = os.path.dirname("{fpath}")+"/"+"aln_"+os.path.basename("{fpath}")[:-4]+".j",
@@ -45,9 +46,10 @@ rule bwa_map:
 		#lsf_e = os.path.dirname("{fpath}")+"/"+"aln_"+os.path.basename("{fpath}")[:-4]+".e" # not all output files contain the same wildcards
 		lsf_o = "{fpath}_aln.o",
 		lsf_e = "{fpath}_aln.e",
-	threads: 4
+	params:
+		"@RG\\tID:"+os.path.basename("{fpath}")+"\\tSM:"+os.path.basename("{fpath}")
 	shell:
-		""" bsub -M4000 -n {threads} -R"span[hosts=1] select[mem>4000] rusage[mem=4000]" -Jaln -o{output.lsf_o} -e {output.lsf_e} "bwa mem -t{threads} {ref} {input.i1} {input.i2} | samtools view -h -b - | samtools sort - -o {output.srtbam}" """
+		""" bsub -M4000 -n4 -R"span[hosts=1] select[mem>4000] rusage[mem=4000]" -K -Jaln -o{output.lsf_o} -e {output.lsf_e} "bwa mem -t4 -R '{params}' {ref} {input.i1} {input.i2} | samtools view -h -b - | samtools sort - -o {output.srtbam}" """
 
 rule bam_idx:
 	input:
@@ -69,7 +71,7 @@ rule markdups:
 		#lsf_o = os.path.dirname("{fpath}")+"/"+"md_"+os.path.basename("{fpath}")[:-4]+".o",
 		#lsf_e = os.path.dirname("{fpath}")+"/"+"md_"+os.path.basename("{fpath}")[:-4]+".e"
 	shell:
-		""" bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -K -Jmd -o{output.lsf_o} -e{output.lsf_e} "java -jar -Xmx4G {input.picd_pth} MarkDuplicates I={input.i} O={output.o_bam} M={output.o_mat} AS=true" """
+		""" bsub -n4 -M4000 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -K -Jmd -o{output.lsf_o} -e{output.lsf_e} "java -jar -Xmx4G -XX:ParallelGCThreads=4 {input.picd_pth} MarkDuplicates I={input.i} O={output.o_bam} M={output.o_mat} AS=true" """
 rule fa_idx:
 	output: 
 		dict_fa = ref[:-3]+".dict",
@@ -95,7 +97,7 @@ rule hapcall: # haplotyecaller
 		#lsf_o = os.path.dirname("{fpath}")+"/"+"hc_"+os.path.basename("{fpath}")[:-4]+".o",
 		#lsf_e = os.path.dirname("{fpath}")+"/"+"hc_"+os.path.basename("{fpath}")[:-4]+".e"
 	shell:
-		""" bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jhc -o{output.lsf_o} -e{output.lsf_e} -K "java -jar -Xmx4G {gatk_pth} HaplotypeCaller  -I{input.srtbam} -R {ref} -ERC GVCF -G StandardAnnotation -GAS_StandardAnnotation -O {output.ogvcf}" & """
+		""" bsub -n4 -M4000 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jhc -o{output.lsf_o} -e{output.lsf_e} -K "java -jar -Xmx4G -XX:ParallelGCThreads=4 {gatk_pth} HaplotypeCaller  -I{input.srtbam} -R {ref} -ERC GVCF -G StandardAnnotation -GAS_StandardAnnotation -O {output.ogvcf}" """
 
 rule cmbgvcfs:
 	input: 
@@ -106,9 +108,9 @@ rule cmbgvcfs:
 		lsf_e = "cmb.e",
 		lsf_o = "cmb.o"
 	params:
-		"-V ".join([x for x in fpaths])	
+		"-V "+" -V ".join([x+".raw.g.vcf.gz" for x in fpaths])	
 	shell:
-		""" bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jcmb -o{output.lsf_o} -e{output.lsf_e} -K "java -jar -Xmx4G {gatk_pth} CombineGVCFs {params} -R {ref} -O {output.o_gvcfs}" """
+		""" bsub -n4 -M4000 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jcmb -o{output.lsf_o} -e{output.lsf_e} -K "java -jar -Xmx4G -XX:ParallelGCThreads=4 {gatk_pth} CombineGVCFs {params} -R {ref} -O {output.o_gvcfs}" """
 
 rule genotypevcf:
 	input:
@@ -119,7 +121,7 @@ rule genotypevcf:
 		lsf_e = "gnv.e",
 		lsf_o = "gnv.o"
 	shell:	
-		""" bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jgnv -o{output.lsf_o} -K -e{output.lsf_e} "java -jar -Xmx4G {gatk_pth} GenotypeGVCFs -R {ref} -V {input.i_gvcfs} -O {output.o_vcf}" """	
+		""" bsub -M4000 -n4 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jgnv -o{output.lsf_o} -K -e{output.lsf_e} "java -jar -Xmx4G -XX:ParallelGCThreads=4 {gatk_pth} GenotypeGVCFs -R {ref} -V {input.i_gvcfs} -O {output.o_vcf}" """	
 
 rule fltv: 
 	input:
@@ -131,4 +133,5 @@ rule fltv:
 		lsf_o = "fltv.o"
 		
 	shell:
-		""" bsub -M4000 -R"select[mem>4000] rusage[mem=4000]" -Jfltv -o{output.lsf_o} -e{output.lsf_e} "java -jar -Xmx4G {gatk_pth} VariantFiltration -R {ref} -V {input.i_vcf} -filter "QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0" --filter-name "basic_filtering" -O {f_out}" """ 
+		""" bsub -K -n4 -M4000 -R"select[mem>4000] rusage[mem=4000] span[hosts=1]" -Jfltv -o{output.lsf_o} -e{output.lsf_e} "java -jar -Xmx4G  -XX:ParallelGCThreads=4 {gatk_pth} VariantFiltration -R {ref} -V {input.i_vcf} -filter 'QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0' --filter-name "basic_filtering" -O {f_out}" """ #don't use "QD < 2.0 ......" 
+
