@@ -1,6 +1,6 @@
 import os, sys, glob, json
 
-def get_fls(pth, suf):
+def wd_fls(pth, suf):
     # cur = os.getcwd()
     # os.chdir(pth)
     # abspath=os.path.abspath(pth)
@@ -14,46 +14,92 @@ def get_fls(pth, suf):
     # os.chdir(cur)
     return fls
 
-def write(k, v, o_fl):
+def update_dict(d, k, vs):
+    if len(vs):
+        if k in d:
+            if type(d[k]) == list:
+                for v in vs:
+                    if v not in d[k]:
+                        d[k].append(v)
+            elif type(d[k]) == str:
+                ov = d[k]
+                if ov != "" and ov not in vs: #even though it could be weird ov can be empty
+                    vs.append(ov)
+                if len(vs) == 1:
+                    d[k] = vs[0]
+                else:
+                    d[k] = vs
+        else:
+            if len(vs) == 1:
+                d[k] = vs[0]
+            else:
+                d[k] = vs
 
-    if os.path.isfile(o_fl):
-        f = open(o_fl, "r+")
-        data = json.load(f)
+def load(fl):
+    if os.path.isfile(fl):
+        f = open(fl, "r+")
+        d = json.load(f)
         f.seek(0, 0)
+        f.truncate()
     else:
-        f = open(o_fl, "w")
-        data = {}
-        
-    # if len(v) > 1:
-        # v_l = [e for e in v]
-    # elif len(v) == 1:
-        # v_l = v[0]
-    # else:
-        # return
-    if k not in data:
-        data[k] =  []
-        # if type(data[k]) == list:
-    # else:
-        # ov = data[k] # work when data[k] is empty?
-        # for e in v:
-            # data[k].append(e)
-    for e in v:
-        data[k].append(e)
+        f = open(fl, "w")
+        d = {}
+
+    return [f, d] 
+
+def dump(d, f):
     f.truncate()
-    json.dump(data, f, indent = 2)
+    json.dump(d, f, indent = 2)
     f.write('\n')
     f.close()
 
+# def write(k, v, o_fl):
+    # if os.path.isfile(o_fl):
+        # f = open(o_fl, "r+")
+        # data = json.load(f)
+        # f.seek(0, 0)
+    # else:
+        # f = open(o_fl, "w")
+        # data = {}
+        
+    # if k not in data:
+        # data[k] =  []
+    # for e in v:
+        # data[k].append(e)
+
+def help():
+    print ("Usage:    config  wd <dir> <suffix> <key>  # add key-value pairs through wildcard") 
+    print ("Usage:    config  ad <key> <value>         # add key-value pairs through values") 
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print ("mkcfg wd DIR SUFFIX KEY")
-        print ("mkcfg add KEY MAP")
+    fn = "config.json"
+    if len(sys.argv) < 2:
+        help()
+    elif sys.argv[1] == "wd":
+        if len(sys.argv) < 5:
+            help()
+        else:
+            fldr = sys.argv[2]
+            suf = "."+sys.argv[3]
+            key = sys.argv[4]
+            
+            nl = wd_fls(fldr, suf)
+            
+            [f, dj] = load(fn)
+            update_dict(dj, key, nl)
+            dump(dj, f)
+    elif sys.argv[1] == "ad":
+        if len(sys.argv) < 4:
+            help()
+        else:
+            key = sys.argv[2]
+            val = sys.argv[3]
+            nl = [val]
+            
+            [f, dj] =load(fn)
+            update_dict(dj, key, nl); 
+            dump(dj, f)
     else:
-        d = sys.argv[1]
-        suf = "."+sys.argv[2]
-        k = sys.argv[3]
-        o = "config.json"
-        write(k, get_fls(d, suf), o)
+        help()
 
